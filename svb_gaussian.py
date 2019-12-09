@@ -1,7 +1,25 @@
 #!/usr/bin/env python
+# coding: utf-8
+
+# Stochastic Variational Bayes
+# =======================
+# 
+# This notebook implements Example 1 from the FMRIB tutorial on Variational Bayes II: Stochastic Variational Bayes ("fitting a Gaussian distribution).
+# 
+# We assume we have data drawn from a Gaussian distribution with true mean $\mu$ and true precision $\beta$:
+# 
+# $$
+# P(y_n | \mu, \beta) = \frac{\sqrt{\beta}}{\sqrt{2\pi}} \exp{-\frac{\beta}{2} (y_n - \mu)^2}
+# $$
+# 
+# One interpretation of this is that our data consists of repeated measurements of a fixed value ($\mu$) combined with Gaussian noise with standard deviation $\frac{1}{\sqrt{\beta}}$.
+# 
+# Here's how we can generate some sample data from this model in Python:
+
+# In[ ]:
+
 
 import numpy as np
-import tensorflow as tf
 
 # Ground truth parameters
 # We infer the precision, BETA, but it is useful to
@@ -20,12 +38,68 @@ DATA = np.random.normal(MU_TRUTH, STD_TRUTH, [N])
 print("Data samples are:")
 print(DATA)
 
+
+# In the 'signal + noise' interpretation we can view this as noisy measurements (red crosses) of a constant signal (green line):
+
+# In[ ]:
+
+
+from matplotlib import pyplot as plt
+plt.figure()
+plt.plot(DATA, "rx")
+plt.plot([MU_TRUTH] * N, "g")
+
+
+# As with analytic Variational Bayes, we need to choose an approximate form for our priors and posteriors. However we have more freedom in the stochastic method since we are not limited by the requirement that the distributions be conjugate with respect to the likelihood. 
+# 
+# We will choose a multivariate normal distribution (MVN) over the two parameters $\mu$ and $log(\frac{1}{\beta})$ for prior and posterior. Inferring the log of the noise variance is useful as it avoid the possibility of negative values during the optimization which would make the likelihood ill-defined.
+# 
+# The choice of an MVN means that we can allow for covariance (correlation) between the noise and signal parameters. This is unlike the analytic case where the posterior had to be factorised over these two parameters.
+# 
+# An MVN distribution for $N$ parameters is defined by a vector of $N$ mean values and an $N \times N$ covariance matrix. For the prior we will use the following values:
+# 
+# $$\textbf{m}_0 = \begin{bmatrix} \mu_0 \\ b_0 \end{bmatrix}$$
+# 
+# $$\textbf{C}_0 = \begin{bmatrix} v_0 & 0 \\ 0 & w_0 \end{bmatrix}$$
+# 
+# Note that we are not assuming any prior covariance. 
+# 
+# We define some suitable relatively uninformative prior values here:
+
+# In[ ]:
+
+
 m0 = 0.0
 v0 = 100000.0
 b0 = 0.0
 w0 = 100000.0
 print("Priors: P(mu, log(1/beta)) = MVN([%f, %f], [[%f, 0], [0, %f]])" % (m0, v0, b0, w0))
 
+
+# Stochastic VB is based around minimising the free energy so we will need to implement the calculation of the free energy. We will be using the TensorFlow framework to perform the minimisation so the calculation must be in terms of tensors (multidimensional arrays). In our case the following constant tensors must be defined (where $N$ is the number of data values we have:
+# 
+#  - Data samples: $[N]$
+#  - Prior mean: $[2]$
+#  - Prior covariance: $[2 \times 2]$
+# 
+# We must also define *variable* tensors for the posterior - TensorFlow will allow these to change during the optimization in order to minimise the cost (free energy):
+# 
+#  - Posterior mean: $[2]$
+#  - Posterior covariance: $[2 \times 2]$
+# 
+# The posterior covariance must be a positive-definite matrix - since the optimizer does not know this, it is possible that invalid values may arise and the optimization will fail. To get around this restriction we build the covariance matrix from its Chlolesky decomposition.
+# 
+# $$\textbf{C} = (\textbf{C}_{chol})^T\textbf{C}_{chol}$$
+# 
+# $\textbf{C}_{chol}$ must have positive diagonal elements, so we define the underlying variables for these elements in terms of the log and then form the full $\textbf{C}_{chol}$ matrix as a sum of the exponentials of the log-diagonal elements, and independent variables for the off-diagonal components.
+# 
+# The code for this is below. Note that we need to define initial values for the posterior variables. It turns out that in the stochastic method it is important that the initial poster variance is not too large so although the prior is not informative, the initial posterior is. 
+
+# In[ ]:
+
+
+import tensorflow as tf
+import numpy as np
 data = tf.constant(DATA, dtype=tf.float32)
 prior_means = tf.constant([m0, v0], dtype=tf.float32)
 prior_covariance = tf.constant([[v0, 0.0], [0.0, w0]], dtype=tf.float32)
@@ -34,6 +108,9 @@ post_means_init = [0.0, 0.0]
 post_covariance_init = [[1.0, 0.0], [0.0, 1.0]]
 
 chol_off_diag = tf.Variable([[0, 0], [0, 0]], dtype=tf.float32)
+# Comment in this line if you do NOT want to infer parameter covariances
+#chol_off_diag = tf.constant([[0, 0], [0, 0]], dtype=tf.float32)
+
 chol_log_diag = tf.Variable(tf.log(tf.diag_part(post_covariance_init)), dtype=tf.float32)
 chol_diag = tf.diag(tf.sqrt(tf.exp(chol_log_diag)))
 post_covariance_chol = tf.add(chol_diag, tf.matrix_band_part(chol_off_diag, -1, 0))
@@ -42,10 +119,24 @@ post_covariance = tf.matmul(tf.transpose(post_covariance_chol), post_covariance_
 post_means = tf.Variable(post_means_init, dtype=tf.float32)
   
 
+
+# At this point we will show how we actually evaluate calculations in TensorFlow. TensorFlow works by defining a graph of operations, but no calculation actually takes place until you ask it to evaluate a tensor (which might be defined in terms of other tensors or Variables. For example we can evaluate the inital values of our posterior as follows:
+
+# In[ ]:
+
+
 sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 print("Initial posterior mean: %s" % sess.run(post_means))
 print("Initial posterior covariance:\n%s" % sess.run(post_covariance))
+
+
+# The next requirement is to be able to obtain a sample of *predicted* data values from the posterior. In stochastic VB this is used to approximate the integrals in the calculation of the free energy. It is *not* related to the number of data samples we have. Smaller values give quicker calculation, but may result in a noisy, non-convergent optimization. We'll start off with a sample size of 5, but you can change this later if you want.
+# 
+# Note the use of the 'reparameterization trick' to express the samples as the scaling of a fixed MVN distribution - this improves the ability of the optimizer to choose better values for the next iteration.
+
+# In[ ]:
+
 
 # Number of samples from the posterior
 S=5
@@ -60,15 +151,29 @@ samples = tf.tile(tf.reshape(post_means, [2, 1]), [1, S])
 # Now add the random sample scaled by the covariance
 post_samples = tf.add(samples, tf.matmul(post_covariance_chol, eps))
 
+
+# Let's see how this works by evaluating a sample on our initial posterior
+
+# In[ ]:
+
+
 print(sess.run(post_samples))
+
+
+# Note that we have 5 samples for each of the two parameters - the top row are samples values for $\mu$ and the bottom row are samples of the noise log variance $-\log{\beta}$.
+# 
+# Next we need to implement the free energy calculation. This is the sum of the reconstruction loss (the extent to which the posterior matches the data) and the latent loss (the extent to which the posterior matches the prior). Let's do the reconstruction loss first which is the expected value of the log-likelihood across the posterior distribution. Remember that the expectation integral is being approximated using the samples we have from the posterior. So we evaluate the log-likelihood for *each* set of samples and then take the mean across all the samples.
+
+# In[ ]:
+
 
 # These are out sample of values for the mu parameter
 mu_samples = post_samples[0]
 
-# Get the current estimate of the noise variance 1/beta remembering that
-# we are inferring the log of the noise variance
-log_noise = post_samples[1]
-noise_var = tf.exp(log_noise)
+# Get the current estimate of the noise variance remembering that
+# we are inferring the log of the noise precision, beta
+log_noise_var = -post_samples[1]
+noise_var = tf.exp(log_noise_var)
 
 # Each sample value predicts the full set of values in the data sample.
 # For our constant-signal model, the prediction is simply a set of 
@@ -83,13 +188,25 @@ sum_square_diff = tf.reduce_sum(tf.square(data - prediction), axis=-1)
 # Now we calculate the likelihood for each posterior sample (shape [S])
 # Note that we are ignoring constant factors such as 2*PI here as they 
 # are just an fixed offset and do not affect the optimization 
-log_likelihood = 0.5 * (log_noise * tf.to_float(N) + sum_square_diff / noise_var)
+log_likelihood = 0.5 * (-log_noise_var * tf.to_float(N) - sum_square_diff / noise_var)
 
 # Finally to evaluate the expectation value we take the mean across all the posterior
 # samples
-reconstr_loss = tf.reduce_mean(log_likelihood)
+reconstr_loss = -tf.reduce_mean(log_likelihood)
+
+
+# In[ ]:
+
 
 print("Reconstruction loss is: %f" % sess.run(reconstr_loss))
+
+
+# On to the latent loss, this is the log-KL divergence between the posterior and prior. Since
+# both our prior and posterior are MVN distributions, we can use a known analytic result as
+# given in the tutorial:
+
+# In[ ]:
+
 
 C = post_covariance
 C0 = prior_covariance
@@ -108,12 +225,33 @@ term4 = tf.matmul(tf.matmul(m_minus_m0_T, C0_inv), m_minus_m0)
           
 latent_loss = 0.5 * (term1 + term2 + term3 + term4)
 
+
+# In[ ]:
+
+
 print("Latent loss is: %f" % sess.run(latent_loss))
+
+
+# Note that if you re-evaluate the reconstruction loss you get a different answer each time - because it depends on the sample from the posterior. But the latent loss is being calculated analytically and is independent of the sample, so we get the same answer each time.
+# 
+# (If you increase the posterior sample size you will get a more consistent value of the reconstruction loss - try it!)
+# 
+# Now we define the total cost (free energy) as the sum of the latent and reconstruction costs:
+
+# In[ ]:
+
 
 cost = reconstr_loss + latent_loss
 print("Total cost is: %f" % sess.run(cost))
 
-optimizer = tf.train.AdamOptimizer(learning_rate=0.5)
+
+# To optimize the posterior we need to iteratively minimise the cost using TensorFlow's built in gradient optimizer. We use the Adam optimizer for this, which is a refinement of the standard Gradient Descent optimizer. 
+# 
+
+# In[ ]:
+
+
+optimizer = tf.train.AdamOptimizer(learning_rate=0.4)
 minimizer = optimizer.minimize(cost)
 sess.run(tf.global_variables_initializer())
 
@@ -123,12 +261,48 @@ for epoch in range(5000):
     cost_history.append(float(sess.run(cost)))
     print("Epoch %i: cost=%f, posterior means=%s" % (epoch+1, sess.run(cost), sess.run(post_means)))
 
+
+# We should find our estimates for mu and beta are as expected, remembering that we chose
+# to estimate $-\log{\beta}$:
+
+# In[ ]:
+
+
 final_means = sess.run(post_means)
 final_covariance = sess.run(post_covariance)
 print("Estimate for mu: %f (variance: %f)" % (final_means[0], final_covariance[0, 0]))
-print("Estimate for beta: %f" % np.exp(-final_means[1]))
+print("Estimate for beta: %f" % np.exp(final_means[1]))
+
+
+# The convergence of the minimisation in this case is rather slow - considering the simplicity of the problem. This is partly due to the large difference between the initial posterior and the true value for $\mu$. However, frameworks like TensorFlow are not really optimized for inferring such a small number of parameters and the method. If we plot the cost history we can see that it gets stuck in a local minimum for some time:
+
+# In[ ]:
+
 
 from matplotlib import pyplot as plt
 plt.plot(cost_history)
 plt.ylim(50000, 51000)
+
+
+# We can also plot our inferred value of $\mu$ with error bars $\pm 2\sigma$ derived from the inferred variance on this parameter
+
+# In[ ]:
+
+
+plt.figure()
+plt.plot(DATA, "rx")
+plt.plot([MU_TRUTH] * N, "g")
+plt.plot([final_means[0]] * N, "b")
+plt.plot([final_means[0]+2*np.sqrt(final_covariance[0, 0])] * N, "b--")
+plt.plot([final_means[0]-2*np.sqrt(final_covariance[0, 0])] * N, "b--")
 plt.show()
+
+# The main advantage of the SVB approach is the flexibility - as well as losing the restriction to conjugate priors, it is also much easier to implement more advanced types of parameters and priors, for example global parameters or spatial regularization priors. While these can (and have been) incorporated into the analytic VB framework, they require update equations to be re-derived whereas the SVB method simply needs an expression for the cost which is generally more straightforward.
+# 
+# Some things you might like to try with this example:
+# 
+#  - Do not infer the covariance between the parameters (see commented out code in the definition of the posterior). This generally makes the convergence less noisy.
+#  - Modify the number of samples and the learning rate and see how they affect the convergence
+#  - Try implementing the stochastic form of the latent loss rather than the analytic result for an MVN that we have used here (see Box 1 in the tutorial). This is necessary in cases where we do not assume an MVN structure for the prior and posterior. Essentially you need to calculate the log PDF for the prior and posterior for each sample and take the mean over all the samples.
+#  
+# 
