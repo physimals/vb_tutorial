@@ -16,9 +16,6 @@
 # 
 # Here's how we can generate some sample data from this model in Python:
 
-# In[ ]:
-
-
 import numpy as np
 
 # Ground truth parameters
@@ -44,17 +41,11 @@ DATA = DATA_CLEAN + np.random.normal(0, STD_TRUTH, [N])
 print("Data samples are:")
 print(DATA)
 
-
 # We can plot this data to illustrate the true signal (green line) and the measured data (red crosses):
-
-# In[ ]:
-
-
 from matplotlib import pyplot as plt
 plt.figure()
 plt.plot(DATA, "rx")
 plt.plot(DATA_CLEAN, "g")
-
 
 # As with the single Gaussian example we will use a multivariate normal distribution as our prior and approximate posterior distributions. 
 # 
@@ -62,10 +53,6 @@ plt.plot(DATA_CLEAN, "g")
 # 
 # We will still choose our priors to be relatively uninformative as follows:
 # 
-
-# In[ ]:
-
-
 a0 = 1.0
 v0 = 100000.0
 r0 = 0.0
@@ -76,12 +63,7 @@ print("Priors: Amplitude mean=%f, variance=%f" % (a0, v0))
 print("        Log decay rate mean=%f, variance=%f" % (r0, u0))
 print("        Log noise variance mean=%f, variance=%f" % (b0, w0))
 
-
 # The posterior will be defined in the same way as for the single Gaussian example, however we need to account for the increased number of parameters we are inferring. We will initialize the posterior with the prior values but with reduced initial variance to prevent problems with generating a representative posterior sample. Remember that the decay rates (and the noise) are being inferred as their log-values so the prior mean of 0 translates into a value of 1.
-
-# In[ ]:
-
-
 import tensorflow as tf
 
 # Number of parameters - 4 for the biexponential + noise
@@ -109,11 +91,7 @@ sess.run(tf.initialize_all_variables())
 print("Initial posterior mean: %s" % sess.run(post_means))
 print("Initial posterior covariance:\n%s" % sess.run(post_covariance))
 
-
 # The code to generate a posterior sample is unchanged except for the number of parameters:
-
-# In[ ]:
-
 
 # Number of samples from the posterior
 S=5
@@ -128,15 +106,11 @@ samples = tf.tile(tf.reshape(post_means, [NUM_PARAMS, 1]), [1, S])
 # Now add the random sample scaled by the covariance
 post_samples = tf.add(samples, tf.matmul(post_covariance_chol, eps))
 
-
 # In calculating the reconstruction cost we need to calculate the log likelihood of the data given a set of model parameters. We do this by observing that any difference between the biexponential model prediction (given these parameters) and the actual noisy data must be a result of the Gaussian noise - hence the likelihood is simply the likelihood of drawing these differences from the Gaussian noise distribution:
 # 
 # $$\log P(\textbf{y} | A_1; A_2; r_1; r_2; \beta) = \frac{1}{2} \bigg( N \log \beta - \sum{\frac{(y_n - M_n)^2}{\beta}}\bigg)$$
 # 
 # Here $M_n$ is the model prediction for the nth data point which is calculated by evaluating the biexponential model for the given parameters $A_1$, $A_2$, $r_1$ and $r_2$.
-
-# In[ ]:
-
 
 # These are our sample of values for the model parameters
 a1 = tf.reshape(post_samples[0], [-1, 1])
@@ -170,11 +144,7 @@ log_likelihood = 0.5 * (-log_noise_var * tf.to_float(N) - sum_square_diff / nois
 # samples. The negative of this is the reconstruction loss
 reconstr_loss = -tf.reduce_mean(log_likelihood)
 
-
 # For the latent loss we will again use the analytic expression for the K-L divergence of two MVN distributions with a slight modification to the previous code to account for the different number of parameters (5 vs 2)
-
-# In[ ]:
-
 
 C = post_covariance
 C0 = prior_covariance
@@ -195,12 +165,7 @@ latent_loss = 0.5 * (term1 + term2 + term3 + term4)
 
 cost = reconstr_loss + latent_loss
 
-
 # Finally we ask TensorFlow to minimise the total cost iteratively:
-
-# In[ ]:
-
-
 optimizer = tf.train.AdamOptimizer(learning_rate=0.02)
 minimizer = optimizer.minimize(cost)
 sess.run(tf.global_variables_initializer())
@@ -211,10 +176,6 @@ for epoch in range(5000):
     cost_history.append(float(sess.run(cost)))
     print("Epoch %i: cost=%f, posterior means=%s" % (epoch+1, sess.run(cost), sess.run(post_means)))
 
-
-# In[ ]:
-
-
 final_means = sess.run(post_means)
 final_covariance = sess.run(post_covariance)
 print("Estimate for amp1: %f (variance: %f)" % (final_means[0], final_covariance[0, 0]))
@@ -223,12 +184,7 @@ print("Estimate for r1: %f" % (np.exp(final_means[1]),))
 print("Estimate for r2: %f" % (np.exp(final_means[3]),))
 print("Estimate for beta (noise): %f" % np.exp(-final_means[4]))
 
-
 # We can plot the evolution of the total cost and compare the final model prediction against the data and the ground truth signal:
-
-# In[ ]:
-
-
 plt.figure()
 plt.plot(cost_history)
 plt.ylim(0, 500)
@@ -238,7 +194,6 @@ plt.plot(DATA_CLEAN, 'g')
 plt.plot(DATA, 'rx')
 plt.plot(sess.run(prediction[0]), 'b')
 plt.show()
-
 
 # You should get a fairly smooth convergence of the cost and an inferred signal which matches the ground truth fairly closely.
 # 
