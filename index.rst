@@ -1,19 +1,37 @@
-Variational Bayes Tutorial
-==========================
+Variational Bayes Tutorials
+===========================
 
-An interactive tutorial on Analytic and Stochastic Variational Bayes for
-timeseries model fitting.
+These pages bring together a set of tutorials and interactive exercises on 
+Analytic and Stochastic Variational Bayes for timeseries model fitting.
 
-Code samples included are as follows:
+The code samples provided complement the tutorial documents and are best 
+run in conjunction with reading the relevant parts of the documents. They
+are provided in two forms: standalone Python code and Jupyter notebooks.
 
- - Jupyter notebook containing single Gaussian analytic VB example :download:`Download <code/avb_gaussian.ipynb>`
- - Standalone Python code for single Gaussian analytic VB example :download:`Download <code/avb_gaussian.py>`
- - Jupyter notebook containing single Gaussian stochastic VB example :download:`Download <code/svb_gaussian.ipynb>` 
- - Standalone Python code for single Gaussian stochastic VB example :download:`Download <code/svb_gaussian.py>` 
- - Jupyter notebook containing biexponential stochastic VB example :download:`Download <code/svb_biexp.ipynb>` 
- - Standalone Python code for biexponential stochastic VB example :download:`Download <code/svb_biexp.py>` 
- 
-.. toctree::
-   :maxdepth: 1
-   :caption: Contents:
-  
+All code requires Numpy to be installed, the Stochastic VB code also requires
+TensorFlow v1 or v2.
+
+Analytic Variational Bayes
+--------------------------
+
+Tutorial document: :download:`FMRIB Variational Bayes Tutorial <docs/FMRIB_VB_tutorial_1_avb.pdf>`
+
+Code samples
+~~~~~~~~~~~~
+
+ - Inferring a single Gaussian: :download:`Jupyter notebook <code/avb_gaussian.ipynb>`
+   :download:`Standalone Python <code/avb_gaussian.py>`
+
+Stochastic Variational Bayes
+----------------------------
+
+Tutorial document: :download:`FMRIB Variational Bayes Tutorial 2 <docs/FMRIB_VB_tutorial_2_svb.pdf>`
+
+Code samples
+~~~~~~~~~~~~
+
+ - Inferring a single Gaussian: :download:`Jupyter notebook <code/svb_gaussian.ipynb>`
+   :download:`Standalone Python <code/svb_gaussian.py>`
+
+ - Inferring a bi-exponential: :download:`Jupyter notebook <code/svb_biexp.ipynb>`
+   :download:`Standalone Python <code/svb_biexp.py>`
