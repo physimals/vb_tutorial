@@ -64,7 +64,10 @@ print("        Log decay rate mean=%f, variance=%f" % (r0, u0))
 print("        Log noise variance mean=%f, variance=%f" % (b0, w0))
 
 # The posterior will be defined in the same way as for the single Gaussian example, however we need to account for the increased number of parameters we are inferring. We will initialize the posterior with the prior values but with reduced initial variance to prevent problems with generating a representative posterior sample. Remember that the decay rates (and the noise) are being inferred as their log-values so the prior mean of 0 translates into a value of 1.
-import tensorflow as tf
+try:
+    import tensorflow.compat.v1 as tf
+except ImportError:
+    import tensorflow as tf
 
 # Number of parameters - 4 for the biexponential + noise
 NUM_PARAMS = 4 + 1

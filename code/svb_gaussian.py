@@ -97,8 +97,11 @@ print("Priors: P(mu, log(1/beta)) = MVN([%f, %f], [[%f, 0], [0, %f]])" % (m0, v0
 
 # In[ ]:
 
+try:
+    import tensorflow.compat.v1 as tf
+except ImportError:
+    import tensorflow as tf
 
-import tensorflow as tf
 import numpy as np
 data = tf.constant(DATA, dtype=tf.float32)
 prior_means = tf.constant([m0, v0], dtype=tf.float32)
