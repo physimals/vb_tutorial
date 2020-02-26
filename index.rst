@@ -22,6 +22,8 @@ Code samples
  - Inferring a single Gaussian: :download:`Jupyter notebook <code/avb_gaussian.ipynb>`
    :download:`Standalone Python <code/avb_gaussian.py>`
 
+ - Inferring a nonlinear model (single exponential decay): :download:`Standalone Python <code/avb_nonlin_model.py>`
+
 Stochastic Variational Bayes
 ----------------------------
 
